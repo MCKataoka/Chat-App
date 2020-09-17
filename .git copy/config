@@ -1,0 +1,10 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+[remote "chat-app"]
+	url = https://github.com/MCKataoka/Chat-App.git
+	fetch = +refs/heads/*:refs/remotes/chat-app/*
