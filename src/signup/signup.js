@@ -39,11 +39,11 @@ class SignupComponent extends React.Component {
             </FormControl>
             <FormControl required fullWidth margin='normal'>
               <InputLabel htmlFor='sign-password-input'>Create a password</InputLabel>
-              <Input autoComplete='password' onChange={(e) => this.userTyping('password', e)} autoFocus id='sign-password-input'></Input>
+              <Input type='password' onChange={(e) => this.userTyping('password', e)} autoFocus id='sign-password-input'></Input>
             </FormControl>
             <FormControl required fullWidth margin='normal'>
               <InputLabel htmlFor='sign-password-confirmation-input'>Confirm your password</InputLabel>
-              <Input autoComplete='password' onChange={(e) => this.userTyping('password', e)} autoFocus id='sign-password-confirmation-input'></Input>
+              <Input type='password' onChange={(e) => this.userTyping('passwordConfirmation', e)} autoFocus id='sign-password-confirmation-input'></Input>
             </FormControl>
             <Button type='submit' fullWidth variant='contained' color='primary' className={classes.submit}>
               Submit
@@ -65,12 +65,63 @@ class SignupComponent extends React.Component {
     );
   }
 
+  formIsValid = () => this.state.password === this.state.passwordConfirmation;
+
   submitSignup = (e) => {
-    console.log('Submitting!');
+    e.preventDefault();
+
+    if (!this.formIsValid()) {
+      this.setState({ signupError: 'Passwords do not match!' });
+      return;
+    }
+
+    firebase
+      .auth()
+      .createUserWithEmailAndPassword(this.state.email, this.state.password)
+      .then(
+        (authRes) => {
+          const userObj = {
+            email: authRes.user.email
+          };
+          firebase
+            .firestore()
+            .collection('users')
+            .doc(this.state.email)
+            .set(userObj)
+            .then(
+              () => {
+                this.props.history.push('/dashboard');
+              },
+              (dbErr) => {
+                console.log(dbErr);
+                this.setState({ signupError: 'Failed to add user' });
+              }
+            );
+        },
+        (authErr) => {
+          console.log(authErr);
+          this.setState({ signupError: 'Failed to add user' });
+        }
+      );
   };
 
   userTyping = (type, e) => {
-    console.log(type, e);
+    switch (type) {
+      case 'email':
+        this.setState({ email: e.target.value });
+        break;
+
+      case 'password':
+        this.setState({ password: e.target.value });
+        break;
+
+      case 'passwordConfirmation':
+        this.setState({ passwordConfirmation: e.target.value });
+        break;
+
+      default:
+        break;
+    }
   };
 }
 
