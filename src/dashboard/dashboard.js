@@ -1,8 +1,8 @@
 import React from 'react';
-// import NewChatComponent from '../NewChat/newChat';
+import NewChatComponent from '../newchat/newChat';
 import ChatListComponent from '../chatlist/chatList';
 import ChatViewComponent from '../chatview/chatView';
-// import ChatTextBoxComponent from '../ChatTextBox/chatTextBox';
+import ChatTextBoxComponent from '../chattextbox/chatTextBox';
 import styles from './styles';
 import { Button, withStyles } from '@material-ui/core';
 const firebase = require('firebase');
@@ -20,7 +20,6 @@ class DashboardComponent extends React.Component {
 
   render() {
     const { classes } = this.props;
-
     return (
       <div>
         <ChatListComponent
@@ -32,6 +31,8 @@ class DashboardComponent extends React.Component {
           selectedChatIndex={this.state.selectedChat}
         />
         {this.state.newChatFormVisible ? null : <ChatViewComponent user={this.state.email} chat={this.state.chats[this.state.selectedChat]} />}
+        {this.state.selectedChat !== null && !this.state.newChatFormVisible ? <ChatTextBoxComponent messageReadFn={this.messageRead} submitMessageFn={this.submitMessage} /> : null}
+        {this.state.newChatFormVisible ? <NewChatComponent goToChatFn={this.goToChat} newChatSubmitFn={this.newChatSubmit} /> : null}
         <Button onClick={this.signOut} className={classes.signOutBtn}>
           Sign Out
         </Button>
@@ -41,11 +42,71 @@ class DashboardComponent extends React.Component {
 
   signOut = () => firebase.auth().signOut();
 
-  selectChat = (chatIndex) => {
-    this.setState({ selectChat: chatIndex });
+  selectChat = async (chatIndex) => {
+    await this.setState({ selectedChat: chatIndex, newChatFormVisible: false });
+    this.messageRead();
   };
 
+  submitMessage = (msg) => {
+    const docKey = this.buildDocKey(this.state.chats[this.state.selectedChat].users.filter((_usr) => _usr !== this.state.email)[0]);
+    firebase
+      .firestore()
+      .collection('chats')
+      .doc(docKey)
+      .update({
+        messages: firebase.firestore.FieldValue.arrayUnion({
+          sender: this.state.email,
+          message: msg,
+          timestamp: Date.now()
+        }),
+        receiverHasRead: false
+      });
+  };
+
+  buildDocKey = (friend) => [this.state.email, friend].sort().join(':');
+
   newChatBtnClicked = () => this.setState({ newChatFormVisible: true, selectedChat: null });
+
+  messageRead = () => {
+    const chatIndex = this.state.selectedChat;
+    const docKey = this.buildDocKey(this.state.chats[chatIndex].users.filter((_usr) => _usr !== this.state.email)[0]);
+    console.log('HELLO FN: ', this.clickedChatWhereNotSender(this.state.selectedChat));
+    if (this.clickedChatWhereNotSender(this.state.selectedChat)) {
+      firebase.firestore().collection('chats').doc(docKey).update({ receiverHasRead: true });
+    } else {
+      console.log('Clicked message where the user the sender');
+    }
+  };
+
+  goToChat = async (docKey, msg) => {
+    const usersInChat = docKey.split(':');
+    const chat = this.state.chats.find((_chat) => usersInChat.every((_user) => _chat.users.includes(_user)));
+    this.setState({ newChatFormVisible: false });
+    await this.selectChat(this.state.chats.indexOf(chat));
+    this.submitMessage(msg);
+  };
+
+  newChatSubmit = async (chatObj) => {
+    const docKey = this.buildDocKey(chatObj.sendTo);
+    await firebase
+      .firestore()
+      .collection('chats')
+      .doc(docKey)
+      .set({
+        messages: [
+          {
+            message: chatObj.message,
+            sender: this.state.email
+          }
+        ],
+        users: [this.state.email, chatObj.sendTo],
+        receiverHasRead: false
+      });
+    this.setState({ newChatFormVisible: false });
+    this.selectChat(this.state.chats.length - 1);
+  };
+
+  clickedChatWhereNotSender = (chatIndex) => this.state.chats[chatIndex].messages[this.state.chats[chatIndex].messages.length - 1].sender !== this.state.email;
 
   componentDidMount = () => {
     firebase.auth().onAuthStateChanged(async (_usr) => {
